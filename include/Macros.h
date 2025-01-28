@@ -4,6 +4,7 @@
 #define D_TEXT(x)  __attribute__((section(".text$" #x "")))
 #define FUNC D_TEXT(B)
 #define D_API(x)  __typeof__(x) *x;
+#define MemCopy  __builtin_memcpy
 
 // Casting macros
 #define C_PTR(x)   ((PVOID) (x))

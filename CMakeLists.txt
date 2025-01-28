@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.30)
 project(Skunk)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -27,6 +28,8 @@ file(GLOB_RECURSE ALL_CXX_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 file(GLOB_RECURSE ALL_C_FILES "${PROJECT_SOURCE_DIR}/src/*.c")
 file(GLOB_RECURSE ALL_CXX_HEADER_FILES "${PROJECT_SOURCE_DIR}/include/*.hpp")
 file(GLOB_RECURSE ALL_C_HEADER_FILES "${PROJECT_SOURCE_DIR}/include/*.h")
+
+set_source_files_properties(${ALL_C_FILES} PROPERTIES LANGUAGE CXX)
 
 add_executable(
         Skunk

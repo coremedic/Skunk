@@ -8,8 +8,8 @@ extern SkunkLdr:PROC
 
 ; Export procedures
 public Start
-public StRipStart
-public StRipEnd
+public RipStart
+public RipEnd
 
 _TEXT$A segment
 
@@ -23,11 +23,11 @@ Start:
     pop   rsi
     ret
 
-StRipStart:
-    call StRipPtrStart
+RipStart:
+    call RipPtrStart
     ret
 
-StRipPtrStart:
+RipPtrStart:
     mov	rax, [rsp]
     sub rax, 01bh
     ret
@@ -36,13 +36,32 @@ _TEXT$A ends
 
 _TEXT$C segment
 
-StRipEnd:
-    call StRetPtrEnd
+RipEnd:
+    call RetPtrEnd
+    mov rcx, rax
+
+@L:
+    xor rbx, rbx
+    mov ebx, 05a4dh
+    inc rcx
+    cmp bx, word ptr [rcx]
+    jne @L
+
+    xor rax, rax
+    cmp ax, word ptr [rcx + 03ch]
+    add rax, rcx
+
+    xor rbx, rbx
+    add bx, 04550h
+    cmp bx, word ptr [rax]
+    jne @L
+
+    mov rax, rcx
     ret
 
-StRetPtrEnd:
+RetPtrEnd:
     mov rax, [rsp]
-    add rax, 0bh
+    add rax, 036h
     ret
 
 _TEXT$C ends
