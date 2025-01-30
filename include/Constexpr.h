@@ -16,7 +16,7 @@ CONSTEXPR ULONG CompileTimeSeed() {
               (__TIME__[0] - '0') * 36000ULL;
 };
 
-#define H_SEED   (CompileTimeSeed() % 254)
+#define H_SEED   500 //(CompileTimeSeed() % 254)
 #define H_KEY    6
 
 CONSTEXPR ULONG HashStringA(PCHAR string) {

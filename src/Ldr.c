@@ -102,7 +102,13 @@ FUNC SIZE_T StrToWStr(PWCHAR dst, PCHAR src) {
     return MAX_PATH - len;
 }
 
-FUNC VOID LdrResolveIAT(PINSTANCE pInstance, PVOID pMemAddr, PVOID pBaseIat) {
+FUNC SIZE_T StrLen(const CHAR* str) {
+    const CHAR* s;
+    for (s = str; *s; ++s) {}
+    return (s - str);
+}
+
+FUNC VOID LdrResolveIAT(_In_ PINSTANCE pInstance, _In_ PVOID pMemAddr, _In_ PVOID IatBase) {
     PIMAGE_THUNK_DATA           pOrgThunkData   = NULL,
                                 pFirstThunkData = NULL;
     PIMAGE_IMPORT_DESCRIPTOR    pImgImpDesc     = NULL;
@@ -113,34 +119,67 @@ FUNC VOID LdrResolveIAT(PINSTANCE pInstance, PVOID pMemAddr, PVOID pBaseIat) {
     ANSI_STRING                 ansiString      = {0};
 
     // Loop through IAT
-    for (pImgImpDesc = pBaseIat; pImgImpDesc->Name != 0; ++pImgImpDesc) {
+    for (pImgImpDesc = IatBase; pImgImpDesc->Name != 0; ++pImgImpDesc) {
         pModuleName = C_PTR(pMemAddr + pImgImpDesc->Name);
         pOrgThunkData = C_PTR(pMemAddr + pImgImpDesc->OriginalFirstThunk);
         pFirstThunkData = C_PTR(pMemAddr + pImgImpDesc->FirstThunk);
 
         // Process module name
-        WCHAR wModuleName[MAX_PATH] = {0};
-        StrToWStr(wModuleName, pModuleName);
+        //WCHAR wModuleName[MAX_PATH] = {0};
+        //StrToWStr(wModuleName, pModuleName);
 
         // Check if module is already loaded, if not, load it
-        if (!(hModule = LdrModulePeb(HashStringW(&wModuleName)))) {
-            // Module not loaded, lets load it
-            if (!(hModule = pInstance->Win32.LoadLibraryA(pModuleName))) {
-                // Failed to load module... good luck!
-                return;
-            }
+        if (!(hModule = pInstance->Win32.LoadLibraryA(pModuleName))) {
+            // Failed to load module... good luck!
+            return;
         }
+//        if (!(hModule = LdrModulePeb(HashStringW(wModuleName)))) {
+//            // Module not loaded, lets load it
+//            if (!(hModule = pInstance->Win32.LoadLibraryA(pModuleName))) {
+//                // Failed to load module... good luck!
+//                return;
+//            }
+//        }
 
         // Loop through imported functions within this module
         for (; pOrgThunkData->u1.AddressOfData != 0; ++pOrgThunkData, ++pFirstThunkData) {
             if (IMAGE_SNAP_BY_ORDINAL(pOrgThunkData->u1.Ordinal)) {
-                // WIP
-                if ()
+                if (NT_SUCCESS(pInstance->Win32.LdrGetProcedureAddress(hModule, NULL, IMAGE_ORDINAL(pOrgThunkData->u1.Ordinal), &pFunction))) {
+                    pFirstThunkData->u1.Function = U_PTR(pFunction);
+                }
+            } else {
+                pImgImpName = C_PTR(U_PTR(pMemAddr) + pOrgThunkData->u1.AddressOfData);
+                {
+                    ansiString.Length = StrLen(pImgImpName->Name);
+                    ansiString.MaximumLength = ansiString.Length + sizeof(CHAR);
+                    ansiString.Buffer = pImgImpName->Name;
+                }
+
+                if (NT_SUCCESS(pInstance->Win32.LdrGetProcedureAddress(hModule, &ansiString, 0, &pFunction))) {
+                    pFirstThunkData->u1.Function = U_PTR(pFunction);
+                }
             }
         }
     }
 }
 
-FUNC VOID LdrRelocateSections(PVOID pMemAddr, PVOID pBeacon, PVOID pBaseReloc) {
+FUNC VOID LdrRelocateSections(_In_ PVOID pMemAddr, _In_ PVOID pBeacon, _In_ PVOID pBaseReloc) {
+    PIMAGE_BASE_RELOCATION      pImgBaseReloc   = C_PTR(pBaseReloc);
+    LPVOID                      pOffset         = NULL;
+    PIMAGE_RELOC                pImgReloc       = C_PTR(U_PTR(pMemAddr) - U_PTR(pBeacon));
 
+    while (pImgBaseReloc->VirtualAddress != 0) {
+        pImgReloc = (PIMAGE_RELOC) (pImgBaseReloc + 1);
+
+        while ((PBYTE) pImgReloc != (PBYTE) pImgBaseReloc + pImgBaseReloc->SizeOfBlock) {
+            if (pImgReloc->type == IMAGE_REL_TYPE) {
+                *(ULONG_PTR*) (U_PTR(pMemAddr) + pImgBaseReloc->VirtualAddress + pImgReloc->offset) += (ULONG_PTR) pOffset;
+            } else if (pImgReloc->type != IMAGE_REL_BASED_ABSOLUTE) {
+                __debugbreak();
+                continue;
+            }
+            pImgReloc++;
+        }
+        pImgBaseReloc = (PIMAGE_BASE_RELOCATION) pImgReloc;
+    }
 }

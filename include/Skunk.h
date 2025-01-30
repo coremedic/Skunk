@@ -10,6 +10,7 @@ typedef struct {
     struct {
         // Kernel32.dll
         D_API(LoadLibraryA) // Can be replaced with LdrLoadDll
+        D_API(WaitForSingleObject)
 
         // Ntdll.dll
         D_API(NtAllocateVirtualMemory)
@@ -34,6 +35,6 @@ typedef struct {
 
 EXTERN_C PVOID RipStart();
 EXTERN_C PVOID RipEnd();
-EXTERN_C PVOID ProxyCaller();
+EXTERN_C VOID CALLBACK ProxyCaller(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work);
 
 #endif //SKUNK_SKUNK_H

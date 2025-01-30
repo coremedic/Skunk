@@ -42,13 +42,15 @@ RipEnd:
 
 @L:
     xor rbx, rbx
-    mov ebx, 05a4dh
+    mov bx, 05A4Dh
     inc rcx
     cmp bx, word ptr [rcx]
     jne @L
 
     xor rax, rax
-    cmp ax, word ptr [rcx + 03ch]
+    ;cmp ax, word ptr [rcx + 03ch]
+    mov ax, [rcx + 03Ch]
+
     add rax, rcx
 
     xor rbx, rbx
@@ -61,6 +63,7 @@ RipEnd:
 
 RetPtrEnd:
     mov rax, [rsp]
+    ;add rax, 8
     add rax, 036h
     ret
 
