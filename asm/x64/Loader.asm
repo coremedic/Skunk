@@ -34,7 +34,7 @@ RipPtrStart:
 
 _TEXT$A ends
 
-_TEXT$C segment
+_TEXT$D segment
 
 RipEnd:
     call RetPtrEnd
@@ -42,7 +42,7 @@ RipEnd:
 
 @L:
     xor rbx, rbx
-    mov bx, 05A4Dh
+    mov ebx, 05A4Dh
     inc rcx
     cmp bx, word ptr [rcx]
     jne @L
@@ -67,13 +67,13 @@ RetPtrEnd:
     add rax, 036h
     ret
 
-_TEXT$C ends
+_TEXT$D ends
 
-_TEXT$D segment
+_TEXT$E segment
 
 SymSkunkEnd:
     db 'S', 'K', 'U', 'N', 'K', 'E', 'N', 'D'
 
-_TEXT$D ends
+_TEXT$E ends
 
 end

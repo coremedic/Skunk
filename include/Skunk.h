@@ -35,6 +35,7 @@ typedef struct {
 
 EXTERN_C PVOID RipStart();
 EXTERN_C PVOID RipEnd();
+EXTERN_C PVOID RipCaller();
 EXTERN_C VOID CALLBACK ProxyCaller(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work);
 
 #endif //SKUNK_SKUNK_H

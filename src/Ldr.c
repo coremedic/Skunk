@@ -108,6 +108,20 @@ FUNC SIZE_T StrLen(const CHAR* str) {
     return (s - str);
 }
 
+FUNC PVOID MemCopy(PVOID dest, const VOID* src, SIZE_T n) {
+    // Volatile cast
+    volatile PCHAR volDest = (volatile PCHAR)dest;
+    volatile const CHAR* volSrc = (volatile const CHAR*)src;
+
+    // Copy memory
+    while (n--) {
+        *volDest++ = *volSrc++;
+    }
+
+    return volDest;
+}
+
+
 FUNC VOID LdrResolveIAT(_In_ PINSTANCE pInstance, _In_ PVOID pMemAddr, _In_ PVOID IatBase) {
     PIMAGE_THUNK_DATA           pOrgThunkData   = NULL,
                                 pFirstThunkData = NULL;
@@ -131,6 +145,7 @@ FUNC VOID LdrResolveIAT(_In_ PINSTANCE pInstance, _In_ PVOID pMemAddr, _In_ PVOI
         // Check if module is already loaded, if not, load it
         if (!(hModule = pInstance->Win32.LoadLibraryA(pModuleName))) {
             // Failed to load module... good luck!
+            __debugbreak();
             return;
         }
 //        if (!(hModule = LdrModulePeb(HashStringW(wModuleName)))) {
@@ -165,8 +180,8 @@ FUNC VOID LdrResolveIAT(_In_ PINSTANCE pInstance, _In_ PVOID pMemAddr, _In_ PVOI
 
 FUNC VOID LdrRelocateSections(_In_ PVOID pMemAddr, _In_ PVOID pBeacon, _In_ PVOID pBaseReloc) {
     PIMAGE_BASE_RELOCATION      pImgBaseReloc   = C_PTR(pBaseReloc);
-    LPVOID                      pOffset         = NULL;
-    PIMAGE_RELOC                pImgReloc       = C_PTR(U_PTR(pMemAddr) - U_PTR(pBeacon));
+    LPVOID                      pOffset         = C_PTR(U_PTR(pMemAddr) - U_PTR(pBeacon));
+    PIMAGE_RELOC                pImgReloc       = NULL;
 
     while (pImgBaseReloc->VirtualAddress != 0) {
         pImgReloc = (PIMAGE_RELOC) (pImgBaseReloc + 1);

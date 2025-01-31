@@ -4,8 +4,9 @@ SECTIONS
     {
         *( .text$A );
         *( .text$B );
-        *( .rdata* );
         *( .text$C );
+        *( .rdata* );
         *( .text$D );
+        *( .text$E );
     }
 }
